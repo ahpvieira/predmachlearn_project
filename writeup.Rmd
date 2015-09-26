@@ -1,0 +1,91 @@
+---
+title: "project_predmachlearn"
+author: "André Vieira"
+date: "26 de setembro de 2015"
+output: html_document
+---
+
+## Executive Summary
+
+This report presents the results of the use of machine learning algorithms to predict the correctness of barbell lifts performances in the Weight Lifting Exercises dataset. Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Data from accelerometers on the belt, forearm, arm, and dumbell of all six participants were collected. ([Read more](http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises))
+
+## Loading and cleaning the data
+
+The preliminary exploratory analysis of the data indicated the presence of some unusual characters ("#DIV/0!") and a lot of missing data in the training data. Besides, the first seven variables of the dataset seemed not useful for our purposes and were removed. The first problem was solved reloading the data ignoring those characters, while only completed columns were kept in the dataset. The same procedures were applied on the testing data.
+
+```{r, cache = T, echo = T}
+if(!file.exists("pml-training.csv")){download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+              destfile = "pml-training.csv")}
+
+if(!file.exists("pml-testing.csv")){download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+              destfile = "pml-testing.csv")}
+
+training <- read.csv("pml-training.csv", na.strings = c("", "NA", "#DIV/0!"))
+trainingVar <- colnames(training[colSums(is.na(training))==F])
+training <- training[trainingVar]
+training <- training[, -c(1:7)]
+
+testing <- read.csv("pml-testing.csv", na.strings = c("", "NA", "#DIV/0!"))
+testingVar <- colnames(testing[colSums(is.na(testing))==F])
+testing <- testing[testingVar]
+testing <- testing[, -c(1:7)]
+```
+
+## Data slicing
+
+Now we have cleaned the training dataset, we can split it into training and test sets in order to build our model on the former and evaluate it on the latter. The training set consists of 13,737 observations on 53 variables, and the test set comprises 5,885 observations on the same 53 columns.
+
+```{r, cache = T, echo = T, warning = F, message = F}
+library(caret)
+set.seed(26915)
+inTrain <- createDataPartition(y = training$classe,
+                               p=0.7, 
+                               list=FALSE)
+trainSet <- training[inTrain,]
+testSet <- training[-inTrain,]
+dim(trainSet); dim(testSet)
+```
+
+## Model Building
+
+In this section, we build our model on the training set using the random forest classification method, which is one of the most widely used and highly accurate method for prediction in machine learning competitions. We use any of the predictive variables in the training set as potential predictors. The model predicted with an error rate of 53%.
+
+```{r, cache = T, echo = T, results = 'hide', warning = F, message = F}
+
+library(randomForest)
+modFit <- randomForest(classe ~., data = trainSet, ntree = 600)
+modFit
+```
+
+## Cross Validation
+
+Then we predict new values with our testing data set. We are also setting a variable called "predRight", which is that we got the prediction right in the data set. In other words, our prediction is equal to the testing data set classe. Next, we make a table of our predictions versus the "classes" to see what that variable would look like. So we can see we missed some values with our random forest model. But overall it was highly accurate in the prediction.
+
+```{r, cache = T, echo = T, warning = F, message = F}
+pred <- predict(modFit, testSet); testSet$predRight <- pred==testSet$classe
+table(pred, testSet$classe)
+```
+
+## Predictions on testing data set
+
+The results of the predictions are presented below. We expect the out of sample error to be larger than the in sample error because of the overfitting, i.e. we matched our algorithm to the training data that we have.
+
+```{r, cache = T, echo = T, warning = F, message = F}
+pred <- predict(modFit, testing)
+```
+
+## Submission
+
+```{r, cache = T, echo = T, warning = F, message = F}
+answers <- c("B", "A", "B", "A", "A", "E", "D", "B", "A", "A", "B", "C", "B", "A", "E", "E", "A", "B", "B", "B")
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
